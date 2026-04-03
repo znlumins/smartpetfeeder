@@ -1,6 +1,18 @@
 "use client";
 import React, { useState } from 'react';
 import { Power, PlusCircle, Wifi, BrainCircuit, Scale, Home, Settings, Clock, Bell, ChevronRight, Smartphone, Trash2, ShieldCheck } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, CartesianGrid } from 'recharts';
+
+// Data simulasi untuk grafik pakan (bisa kamu ganti nanti)
+const dataStats = [
+  { day: 'Mon', amount: 120 },
+  { day: 'Tue', amount: 150 },
+  { day: 'Wed', amount: 180 },
+  { day: 'Thu', amount: 140 },
+  { day: 'Fri', amount: 200 },
+  { day: 'Sat', amount: 170 },
+  { day: 'Sun', amount: 160 },
+];
 
 export default function DashboardScreen() {
   const [activeTab, setActiveTab] = useState<'home' | 'stats' | 'feeder' | 'settings'>('home');
@@ -13,10 +25,8 @@ export default function DashboardScreen() {
     switch (activeTab) {
       case 'home':
         return (
-          // KUNCINYA: flex-1 dan overflow-y-auto di level tab agar bisa di-scroll di HP
           <div className="flex-1 w-full max-w-6xl mx-auto flex flex-col lg:flex-row gap-6 animate-in fade-in duration-500 overflow-y-auto lg:overflow-hidden pb-40 lg:pb-0 px-1 custom-scrollbar">
-            
-            {/* MONITORING - Section 1 */}
+            {/* MONITORING */}
             <div className="flex-[1.5] w-full bg-white rounded-[32px] lg:rounded-[40px] shadow-sm border border-gray-50 flex flex-col items-center justify-center p-8 lg:p-12 min-h-[450px] shrink-0">
               <p className="text-gray-400 font-black uppercase tracking-[0.3em] text-[10px] mb-8 uppercase">Storage Level</p>
               <div className="relative w-64 h-64 lg:w-80 lg:h-80 flex items-center justify-center">
@@ -41,17 +51,16 @@ export default function DashboardScreen() {
               </div>
             </div>
 
-            {/* REMOTE CONTROL & LOGS - Section 2 (Harus kescroll di HP) */}
+            {/* CONTROLS */}
             <div className="flex-1 w-full flex flex-col gap-6 shrink-0">
               <section className="bg-[#1d1d1d] p-8 rounded-[32px] lg:rounded-[40px] text-white shadow-2xl">
                 <div className="flex justify-between items-center mb-6">
-                   <h3 className="font-black text-[10px] uppercase tracking-widest text-gray-500 uppercase">Remote Control</h3>
+                   <h3 className="font-black text-[10px] uppercase tracking-widest text-gray-500">Remote Control</h3>
                    <span className="text-[#e91e63] font-black text-xl">{porsi}g</span>
                 </div>
                 <input type="range" min="10" max="200" step="10" value={porsi} onChange={(e) => setPorsi(parseInt(e.target.value))} className="w-full h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-[#e91e63] mb-8" />
                 <button className="w-full bg-[#e91e63] text-white font-black py-5 rounded-[20px] active:scale-95 transition-all flex items-center justify-center gap-3 tracking-widest text-[10px] uppercase shadow-lg shadow-pink-900/20"><Power size={18} /> Feed Now</button>
               </section>
-
               <section className="bg-white p-8 rounded-[32px] lg:rounded-[40px] border border-gray-50 shadow-sm flex flex-col">
                 <h3 className="font-black text-[10px] uppercase tracking-widest text-gray-400 mb-6 uppercase">Recent Logs</h3>
                 <div className="space-y-3">
@@ -66,18 +75,46 @@ export default function DashboardScreen() {
       case 'stats':
         return (
           <div className="flex-1 w-full max-w-6xl mx-auto bg-white rounded-[32px] lg:rounded-[40px] p-8 lg:p-12 border border-gray-50 animate-in fade-in duration-500 overflow-y-auto lg:overflow-hidden pb-40 lg:pb-0">
-            <h2 className="text-3xl font-black tracking-tighter mb-8 italic uppercase">System <span className="text-[#e91e63]">Stats</span></h2>
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <div className="lg:col-span-2 bg-gray-50 rounded-[32px] p-8 h-80 flex flex-col justify-end border border-gray-100">
-                <div className="flex items-end justify-around h-full pb-6">
-                  {[40, 70, 45, 90, 65, 80, 50].map((h, i) => (
-                    <div key={i} className="w-8 lg:w-10 bg-[#e91e63] rounded-t-xl transition-all" style={{ height: `${h}%` }}></div>
-                  ))}
+            <h2 className="text-3xl font-black tracking-tighter mb-8 italic uppercase leading-none">Feeding <span className="text-[#e91e63]">Analysis</span></h2>
+            
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 h-full lg:h-[70%]">
+              {/* GRAFIK RECHARTS */}
+              <div className="lg:col-span-2 bg-gray-50 rounded-[40px] p-6 lg:p-8 border border-gray-100 flex flex-col min-h-[350px]">
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-8">Weekly Consumption (gram)</p>
+                <div className="flex-1 w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={dataStats}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#eee" />
+                      <XAxis 
+                        dataKey="day" 
+                        axisLine={false} 
+                        tickLine={false} 
+                        tick={{fill: '#9ca3af', fontSize: 10, fontWeight: 900}}
+                        dy={10}
+                      />
+                      <YAxis hide />
+                      <Tooltip 
+                        cursor={{fill: '#f3f4f6'}}
+                        contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', fontWeight: 'bold'}}
+                      />
+                      <Bar dataKey="amount" radius={[10, 10, 10, 10]} barSize={35}>
+                        {dataStats.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={index === 4 ? '#e91e63' : '#ffd1dc'} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
                 </div>
               </div>
-              <div className="grid grid-cols-2 lg:grid-cols-1 gap-4">
-                <StatHighlight label="Total Fed" val="1.2kg" />
-                <StatHighlight label="Success" val="99%" />
+
+              {/* HIGHLIGHT DATA */}
+              <div className="flex flex-col gap-4">
+                <div className="p-8 bg-pink-50 rounded-[40px] border border-pink-100 flex flex-col justify-center">
+                  <p className="text-[9px] font-black text-[#e91e63] uppercase tracking-widest mb-1">Total This Week</p>
+                  <p className="text-4xl font-black text-[#e91e63]">1,120<span className="text-sm ml-1">g</span></p>
+                </div>
+                <StatHighlight label="Avg Portion" val="35g" />
+                <StatHighlight label="Device Health" val="Excellent" />
               </div>
             </div>
           </div>
@@ -88,7 +125,7 @@ export default function DashboardScreen() {
           <div className="flex-1 w-full max-w-6xl mx-auto bg-white rounded-[32px] lg:rounded-[40px] p-8 lg:p-12 border border-gray-50 animate-in fade-in duration-500 overflow-y-auto lg:overflow-hidden pb-40 lg:pb-0">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-10">
               <h2 className="text-3xl font-black tracking-tighter italic uppercase text-center w-full md:w-auto">Feeding <span className="text-[#e91e63]">Schedule</span></h2>
-              <button className="w-full md:w-auto bg-[#1d1d1d] text-white px-8 py-4 rounded-2xl font-black text-[10px] tracking-widest uppercase">+ Add Schedule</button>
+              <button className="w-full md:w-auto bg-[#1d1d1d] text-white px-8 py-4 rounded-2xl font-black text-[10px] tracking-widest uppercase shadow-xl shadow-gray-200">+ Add Schedule</button>
             </div>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               <ScheduleCard time="07:00 AM" portion="25g" repeat="Everyday" />
@@ -114,7 +151,7 @@ export default function DashboardScreen() {
 
   return (
     <div className="h-screen w-full bg-[#fafafa] text-[#1d1d1d] flex flex-col overflow-hidden p-4 lg:p-8">
-      {/* HEADER - Tetap diam di atas */}
+      {/* HEADER */}
       <header className="flex justify-between items-center mb-6 lg:mb-8 px-2 lg:px-4 shrink-0">
         <div className="flex items-center gap-4">
           <div className="bg-[#e91e63] p-3 rounded-2xl text-white shadow-xl shadow-pink-100"><Power size={22} /></div>
@@ -126,12 +163,12 @@ export default function DashboardScreen() {
         <button className="bg-white p-3 rounded-2xl shadow-sm border border-gray-100 text-gray-400 hover:text-[#e91e63] transition-all active:scale-90"><Bell size={18} /></button>
       </header>
 
-      {/* AREA KONTEN - Ini yang kescroll */}
+      {/* AREA KONTEN */}
       <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
         {renderContent()}
       </div>
 
-      {/* NAVIGASI BAWAH - Tetap diam di bawah */}
+      {/* NAVIGASI BAWAH */}
       <nav className="fixed bottom-6 left-4 right-4 lg:left-0 lg:right-0 flex justify-center z-50">
         <div className="bg-white/90 backdrop-blur-md w-full max-w-sm lg:max-w-3xl px-6 lg:px-10 py-4 rounded-full shadow-2xl border border-gray-100 flex justify-between lg:justify-center gap-4 lg:gap-16 items-center">
           <NavBtn icon={<Home size={18}/>} label="Home" active={activeTab === 'home'} onClick={() => setActiveTab('home')} />
