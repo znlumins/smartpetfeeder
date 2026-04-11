@@ -11,31 +11,24 @@ export async function POST(request: Request) {
     const body = await request.json();
     let rawData = body.data || "";
 
-    // 1. Bersihkan karakter aneh tapi sisakan angka, titik, dan pipa (|)
-    const cleanData = rawData.replace(/[^0-9.|A-Z]/gi, "").trim();
-    const parts = cleanData.split('|');
+    // 1. PEMBERSIHAN TOTAL
+    // Kita pecah dulu pakai pipa (|)
+    const parts = rawData.split('|');
 
-    // 2. Gunakan parseFloat dan pastikan hasilnya bukan NaN
-    // Kita ambil bagian pertama (weight)
-    let weightVal = parseFloat(parts[0]);
-    if (isNaN(weightVal)) weightVal = 0; // Jika gagal, set 0
+    // 2. FORCING NUMBER (Hanya ambil angka dan titik saja)
+    // Ini akan membuang \r, \n, spasi, atau karakter aneh yang nempel di "1387"
+    const weightClean = parts[0] ? parts[0].replace(/[^0-9.]/g, '') : "0";
+    const storageClean = parts[1] ? parts[1].replace(/[^0-9.]/g, '') : "0";
+    
+    const weight = parseFloat(weightClean) || 0;
+    const storage = parseInt(storageClean) || 0;
+    const ir_status = parts[2] ? parts[2].trim() : "CLEAR";
 
-    // Kita ambil bagian kedua (storage/stok)
-    let storageVal = parseInt(parts[1]);
-    if (isNaN(storageVal)) storageVal = 0;
+    console.log("DEBUG PARSING ->", { weight, storage, ir_status });
 
-    const ir_status = parts[2] || "CLEAR";
-
-    // DEBUG LOG (Cek di Dashboard Vercel)
-    console.log("HASIL PARSING FINAL:", { weightVal, storageVal, ir_status });
-
-    // 3. Simpan ke Supabase
+    // 3. INSERT KE SUPABASE
     const { error } = await supabase.from('feeder_logs').insert([
-      { 
-        weight: weightVal, 
-        storage: storageVal, 
-        ir_status: ir_status 
-      }
+      { weight, storage, ir_status }
     ]);
 
     if (error) {
@@ -43,7 +36,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    // 4. Cek Perintah Feed
+    // 4. CEK PERINTAH FEED
     const { data: command } = await supabase
       .from('feeder_commands')
       .select('*')
@@ -51,7 +44,9 @@ export async function POST(request: Request) {
       .maybeSingle();
 
     if (command) {
-      await supabase.from('feeder_commands').update({ status: 'SUCCESS' }).eq('id', command.id);
+      await supabase.from('feeder_commands')
+        .update({ status: 'SUCCESS' })
+        .eq('id', command.id);
       return NextResponse.json({ message: 'FEED' });
     }
 
