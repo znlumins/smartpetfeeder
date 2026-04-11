@@ -1,8 +1,7 @@
 "use client";
 import React, { useState, useEffect } from 'react';
 import { createClient, RealtimePostgresInsertPayload } from '@supabase/supabase-js';
-import { Power, BrainCircuit, Scale, Home, Settings, Bell, Trash2, Smartphone, Wifi, ShieldCheck, Loader2 } from 'lucide-react';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, CartesianGrid } from 'recharts';
+import { Power, BrainCircuit, Scale, Home, Settings, Bell, Loader2 } from 'lucide-react';
 
 // Inisialisasi Client Supabase
 const supabase = createClient(
@@ -25,10 +24,9 @@ export default function DashboardScreen() {
   const [bowlWeight, setBowlWeight] = useState(0);
   const [irStatus, setIrStatus] = useState("Checking...");
   const [isOnline, setIsOnline] = useState(false);
-  const [porsi, setPorsi] = useState(25);
   const [logs, setLogs] = useState<FeederLog[]>([]);
   
-  // STATE BARU: Untuk mengunci tombol
+  // State untuk mengunci tombol
   const [isFeeding, setIsFeeding] = useState(false);
 
   useEffect(() => {
@@ -69,21 +67,19 @@ export default function DashboardScreen() {
     return () => { supabase.removeChannel(channel); };
   }, []);
 
-  // FUNGSI BARU: Dengan proteksi klik ganda
   const handleFeedNow = async () => {
     if (isFeeding) return;
-
-    setIsFeeding(true); // Kunci tombol
+    setIsFeeding(true);
 
     const { error } = await supabase
       .from('feeder_commands')
-      .insert([{ command: 'FEED', portion: porsi, status: 'PENDING' }]);
+      // Portion kita set default 25 saja karena slider sudah dihapus
+      .insert([{ command: 'FEED', portion: 25, status: 'PENDING' }]);
     
     if (error) {
       alert("Gagal mengirim perintah!");
       setIsFeeding(false);
     } else {
-      // Cooldown 10 detik agar NodeMCU selesai memproses satu perintah
       setTimeout(() => {
         setIsFeeding(false);
       }, 10000); 
@@ -98,6 +94,7 @@ export default function DashboardScreen() {
         return (
           <div className={tabWrapperClass}>
             <div className="flex flex-col lg:flex-row gap-6">
+              {/* MONITORING STORAGE */}
               <div className="flex-[1.5] w-full bg-white rounded-[40px] shadow-sm border border-gray-50 flex flex-col items-center justify-center p-8 lg:p-12 min-h-112.5">
                 <p className="text-gray-400 font-black uppercase tracking-[0.3em] text-[10px] mb-8 text-center">Food Storage Level</p>
                 <div className="relative w-64 h-64 lg:w-80 lg:h-80 flex items-center justify-center">
@@ -122,30 +119,33 @@ export default function DashboardScreen() {
                 </div>
               </div>
 
+              {/* REMOTE CONTROL & LOGS */}
               <div className="flex-1 flex flex-col gap-6">
-                <section className="bg-[#1d1d1d] p-8 rounded-[40px] text-white shadow-2xl">
-                  <div className="flex justify-between items-center mb-6">
-                     <h3 className="font-black text-[10px] uppercase tracking-widest text-gray-500">Remote Control</h3>
-                     <span className="text-[#e91e63] font-black text-xl">{porsi}g</span>
-                  </div>
-                  <input type="range" min="10" max="100" step="5" value={porsi} onChange={(e) => setPorsi(parseInt(e.target.value))} className="w-full h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-[#e91e63] mb-8" />
+                <section className="bg-[#1d1d1d] p-10 rounded-[40px] text-white shadow-2xl flex flex-col justify-center items-center min-h-[250px]">
+                  <h3 className="font-black text-[10px] uppercase tracking-widest text-gray-500 mb-8">Manual Feeding</h3>
                   
-                  {/* TOMBOL UPDATE: Dengan State Loading */}
                   <button 
                     onClick={handleFeedNow} 
                     disabled={isFeeding}
-                    className={`w-full ${isFeeding ? 'bg-gray-600' : 'bg-[#e91e63] active:scale-95'} text-white font-black py-5 rounded-[20px] transition-all flex items-center justify-center gap-3 tracking-widest text-[10px] uppercase shadow-lg shadow-pink-900/20`}
+                    className={`group relative w-full ${isFeeding ? 'bg-gray-800' : 'bg-[#e91e63] active:scale-95'} text-white font-black py-8 rounded-[30px] transition-all flex flex-col items-center justify-center gap-4 tracking-widest text-[11px] uppercase shadow-xl shadow-pink-900/30`}
                   >
                     {isFeeding ? (
                       <>
-                        <Loader2 className="animate-spin" size={18} /> Processing...
+                        <Loader2 className="animate-spin text-gray-400" size={32} />
+                        <span className="text-gray-400 mt-2">Processing...</span>
                       </>
                     ) : (
                       <>
-                        <Power size={18} /> Feed Now
+                        <div className="bg-white/10 p-4 rounded-full group-hover:bg-white/20 transition-colors">
+                          <Power size={32} />
+                        </div>
+                        <span>Feed Now</span>
                       </>
                     )}
                   </button>
+                  <p className="text-[9px] text-gray-600 mt-6 font-bold uppercase tracking-widest italic">
+                    {isFeeding ? "Wait for device response" : "Tap to release food"}
+                  </p>
                 </section>
 
                 <section className="bg-white p-8 rounded-[40px] border border-gray-50 shadow-sm">
