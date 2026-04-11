@@ -1,7 +1,7 @@
 "use client";
 import React, { useState, useEffect } from 'react';
 import { createClient, RealtimePostgresInsertPayload } from '@supabase/supabase-js';
-import { Power, BrainCircuit, Scale, Home, Settings, Bell, Loader2 } from 'lucide-react';
+import { Power, BrainCircuit, Scale, Home, Settings, Bell, Loader2, History, Database } from 'lucide-react';
 
 // Inisialisasi Client Supabase
 const supabase = createClient(
@@ -17,7 +17,7 @@ interface FeederLog {
   ir_status: string;
 }
 
-export default function DashboardScreen() {
+export default function DashboardPage() {
   const [activeTab, setActiveTab] = useState<'home' | 'stats' | 'feeder' | 'settings'>('home');
   
   const [foodLevel, setFoodLevel] = useState(0);
@@ -25,8 +25,6 @@ export default function DashboardScreen() {
   const [irStatus, setIrStatus] = useState("Checking...");
   const [isOnline, setIsOnline] = useState(false);
   const [logs, setLogs] = useState<FeederLog[]>([]);
-  
-  // State untuk mengunci tombol
   const [isFeeding, setIsFeeding] = useState(false);
 
   useEffect(() => {
@@ -35,7 +33,7 @@ export default function DashboardScreen() {
         .from('feeder_logs')
         .select('*')
         .order('created_at', { ascending: false })
-        .limit(5);
+        .limit(10); 
       
       if (data && data.length > 0) {
         setFoodLevel(data[0].storage);
@@ -58,7 +56,7 @@ export default function DashboardScreen() {
           setFoodLevel(newData.storage);
           setBowlWeight(newData.weight);
           setIrStatus(newData.ir_status === "ADA" ? "Object Detected" : "Clear");
-          setLogs(prev => [newData, ...prev.slice(0, 4)]);
+          setLogs(prev => [newData, ...prev.slice(0, 9)]);
           setIsOnline(true);
         }
       )
@@ -70,19 +68,15 @@ export default function DashboardScreen() {
   const handleFeedNow = async () => {
     if (isFeeding) return;
     setIsFeeding(true);
-
     const { error } = await supabase
       .from('feeder_commands')
-      // Portion kita set default 25 saja karena slider sudah dihapus
       .insert([{ command: 'FEED', portion: 25, status: 'PENDING' }]);
     
     if (error) {
       alert("Gagal mengirim perintah!");
       setIsFeeding(false);
     } else {
-      setTimeout(() => {
-        setIsFeeding(false);
-      }, 10000); 
+      setTimeout(() => setIsFeeding(false), 10000); 
     }
   };
 
@@ -94,7 +88,6 @@ export default function DashboardScreen() {
         return (
           <div className={tabWrapperClass}>
             <div className="flex flex-col lg:flex-row gap-6">
-              {/* MONITORING STORAGE */}
               <div className="flex-[1.5] w-full bg-white rounded-[40px] shadow-sm border border-gray-50 flex flex-col items-center justify-center p-8 lg:p-12 min-h-112.5">
                 <p className="text-gray-400 font-black uppercase tracking-[0.3em] text-[10px] mb-8 text-center">Food Storage Level</p>
                 <div className="relative w-64 h-64 lg:w-80 lg:h-80 flex items-center justify-center">
@@ -119,49 +112,93 @@ export default function DashboardScreen() {
                 </div>
               </div>
 
-              {/* REMOTE CONTROL & LOGS */}
               <div className="flex-1 flex flex-col gap-6">
-                <section className="bg-[#1d1d1d] p-10 rounded-[40px] text-white shadow-2xl flex flex-col justify-center items-center min-h-[250px]">
+                <section className="bg-[#1d1d1d] p-10 rounded-[40px] text-white shadow-2xl flex flex-col justify-center items-center h-full min-h-[300px]">
                   <h3 className="font-black text-[10px] uppercase tracking-widest text-gray-500 mb-8">Manual Feeding</h3>
-                  
                   <button 
                     onClick={handleFeedNow} 
                     disabled={isFeeding}
-                    className={`group relative w-full ${isFeeding ? 'bg-gray-800' : 'bg-[#e91e63] active:scale-95'} text-white font-black py-8 rounded-[30px] transition-all flex flex-col items-center justify-center gap-4 tracking-widest text-[11px] uppercase shadow-xl shadow-pink-900/30`}
+                    className={`group relative w-full h-48 ${isFeeding ? 'bg-gray-800' : 'bg-[#e91e63] active:scale-95'} text-white font-black rounded-[30px] transition-all flex flex-col items-center justify-center gap-4 tracking-widest text-[11px] uppercase shadow-xl shadow-pink-900/30`}
                   >
                     {isFeeding ? (
                       <>
-                        <Loader2 className="animate-spin text-gray-400" size={32} />
+                        <Loader2 className="animate-spin text-gray-400" size={40} />
                         <span className="text-gray-400 mt-2">Processing...</span>
                       </>
                     ) : (
                       <>
-                        <div className="bg-white/10 p-4 rounded-full group-hover:bg-white/20 transition-colors">
-                          <Power size={32} />
+                        <div className="bg-white/10 p-5 rounded-full group-hover:bg-white/20 transition-colors">
+                          <Power size={40} />
                         </div>
                         <span>Feed Now</span>
                       </>
                     )}
                   </button>
-                  <p className="text-[9px] text-gray-600 mt-6 font-bold uppercase tracking-widest italic">
-                    {isFeeding ? "Wait for device response" : "Tap to release food"}
+                  <p className="text-[9px] text-gray-600 mt-8 font-bold uppercase tracking-widest italic text-center">
+                    Tap to release 25g of food<br/>Wait for cooldown after use
                   </p>
-                </section>
-
-                <section className="bg-white p-8 rounded-[40px] border border-gray-50 shadow-sm">
-                  <h3 className="font-black text-[10px] uppercase tracking-widest text-gray-400 mb-6">Recent Logs</h3>
-                  <div className="space-y-3">
-                    {logs.map((log, i) => (
-                      <LogItem key={i} time={new Date(log.created_at).toLocaleTimeString()} amount={`${log.weight}g`} />
-                    ))}
-                  </div>
                 </section>
               </div>
             </div>
           </div>
         );
+
+      case 'feeder': 
+        return (
+          <div className={tabWrapperClass}>
+            <section className="bg-white p-8 rounded-[40px] border border-gray-50 shadow-sm min-h-full">
+              <div className="flex items-center gap-3 mb-8">
+                <div className="bg-gray-100 p-3 rounded-2xl text-gray-600"><History size={20}/></div>
+                <div>
+                  <h3 className="font-black text-lg tracking-tight leading-none uppercase italic">Feeder <span className="text-[#e91e63]">Logs</span></h3>
+                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">History of your pet feeding</p>
+                </div>
+              </div>
+              
+              <div className="space-y-4">
+                {logs.length > 0 ? logs.map((log, i) => (
+                  <div key={i} className="flex justify-between items-center p-6 bg-gray-50 rounded-[25px] border border-gray-100/30 hover:bg-white hover:shadow-md transition-all group">
+                    <div className="flex items-center gap-4">
+                      <div className="bg-white p-3 rounded-2xl shadow-sm group-hover:bg-pink-50 transition-colors">
+                        <Database size={18} className="text-gray-400 group-hover:text-[#e91e63]" />
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="text-[10px] font-black text-gray-300 uppercase tracking-widest">
+                          {new Date(log.created_at).toLocaleDateString()} - {new Date(log.created_at).toLocaleTimeString()}
+                        </span>
+                        <div className="flex gap-4 mt-1">
+                          <span className="text-sm font-black text-gray-800">Weight: {log.weight}g</span>
+                          <span className="text-sm font-black text-gray-400">|</span>
+                          <span className="text-sm font-black text-gray-800">Storage: {log.storage}%</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                       <span className={`text-[10px] font-black uppercase italic ${log.ir_status === "ADA" ? "text-red-400" : "text-green-400"}`}>
+                         {log.ir_status === "ADA" ? "Object On Bowl" : "Success"}
+                       </span>
+                       <div className={`w-2 h-2 rounded-full ${log.ir_status === "ADA" ? "bg-red-400 shadow-[0_0_8px_#f87171]" : "bg-green-400 shadow-[0_0_8px_#4ade80]"}`}></div>
+                    </div>
+                  </div>
+                )) : (
+                  <div className="py-20 text-center">
+                    <p className="text-gray-300 font-black uppercase tracking-widest text-xs italic">No data history available</p>
+                  </div>
+                )}
+              </div>
+            </section>
+          </div>
+        );
+      
       default:
-        return <div className={tabWrapperClass}>Tab content coming soon...</div>;
+        return (
+          <div className={tabWrapperClass}>
+            <div className="flex flex-col items-center justify-center py-20 text-gray-300">
+              <Settings size={48} className="animate-spin-slow mb-4 opacity-20" />
+              <p className="font-black uppercase tracking-[0.3em] text-xs italic opacity-40">Section Under Development</p>
+            </div>
+          </div>
+        );
     }
   };
 
@@ -190,18 +227,6 @@ export default function DashboardScreen() {
           <NavBtn icon={<Settings size={18}/>} label="Settings" active={activeTab === 'settings'} onClick={() => setActiveTab('settings')} />
         </div>
       </nav>
-    </div>
-  );
-}
-
-function LogItem({ time, amount }: { time: string, amount: string }) {
-  return (
-    <div className="flex justify-between items-center p-5 bg-gray-50 rounded-3xl border border-gray-100/30">
-      <div className="flex flex-col">
-        <span className="text-[9px] font-black text-gray-300 uppercase tracking-widest">{time}</span>
-        <span className="text-sm font-extrabold">{amount}</span>
-      </div>
-      <div className="w-2 h-2 rounded-full bg-green-400 shadow-[0_0_8px_#4ade80]"></div>
     </div>
   );
 }
