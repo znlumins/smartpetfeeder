@@ -1,34 +1,48 @@
-// app/api/feeder/route.ts
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 
+// 1. Ambil variabel tanpa tanda '!'
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+// 2. Gunakan fallback (cadangan) agar build tidak crash
+// Kita kasih string kosong jika variabel tidak ditemukan saat proses build
 const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
+  supabaseUrl || 'https://placeholder.supabase.co',
+  supabaseKey || 'placeholder-key'
 );
+
+// 3. Tambahkan ini agar Vercel tidak menganggap ini static page
+export const dynamic = 'force-dynamic';
 
 export async function POST(request: Request) {
   try {
+    // Validasi runtime: Jika beneran kosong saat diakses
+    if (!supabaseUrl || !supabaseKey) {
+      return NextResponse.json({ error: 'Supabase env missing' }, { status: 500 });
+    }
+
     const body = await request.json();
-    const rawData = body.data; // Format dari NodeMCU: "berat|stok|status"
+    const rawData = body.data;
+
+    if (!rawData) return NextResponse.json({ error: 'No data provided' }, { status: 400 });
 
     const [weight, storage, ir_status] = rawData.split('|');
 
-    // 1. Simpan data sensor ke Database
+    // 1. Simpan data sensor
     const { error: insertError } = await supabase
       .from('feeder_logs')
       .insert([
         { 
-          weight: parseFloat(weight), 
-          storage: parseInt(storage), 
-          ir_status: ir_status 
+          weight: parseFloat(weight) || 0, 
+          storage: parseInt(storage) || 0, 
+          ir_status: ir_status || 'unknown'
         }
       ]);
 
     if (insertError) throw insertError;
 
-    // 2. Cek apakah ada perintah "FEED" yang tertunda
-    // Kita ambil data terakhir yang kolom command-nya 'FEED'
+    // 2. Cek perintah "FEED"
     const { data: cmdData } = await supabase
       .from('feeder_commands')
       .select('command')
@@ -36,7 +50,6 @@ export async function POST(request: Request) {
       .single();
 
     if (cmdData?.command === 'FEED') {
-      // Update status jadi 'SUCCESS' supaya tidak kasih makan terus-terusan
       await supabase
         .from('feeder_commands')
         .update({ status: 'SUCCESS' })
@@ -46,7 +59,8 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json({ message: "OK" });
-  } catch (error) {
+  } catch (error: any) {
+    console.error('Error:', error.message);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }
