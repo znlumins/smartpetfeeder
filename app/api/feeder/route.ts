@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
-import { NextResponse } from 'next/server';
+import { NextResponse } from 'next/server'; // Mengatasi error NextResponse
 
+// Mengatasi error Cannot find name 'supabase'
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -9,22 +10,24 @@ const supabase = createClient(
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const rawData = body.data; // Menerima "berat|stok|status" dari NodeMCU
+    const rawData = body.data;
 
-    if (!rawData) return NextResponse.json({ message: 'No Data' }, { status: 400 });
+    // Pastikan pakai NextResponse.json
+    if (!rawData) {
+      return NextResponse.json({ message: 'No Data' }, { status: 400 });
+    }
 
-    // MEMECAH DATA (SPLIT)
     const parts = rawData.split('|');
-    const weight = parseFloat(parts[0]) || 0;
-    const storage = parseInt(parts[1]) || 0;
-    const ir_status = parts[2] || 'CLEAR';
+    const weight = parseFloat(parts[0]?.trim()) || 0;
+    const storage = parseInt(parts[1]?.trim()) || 0;
+    const ir_status = parts[2]?.trim() || 'CLEAR';
 
-    // 1. Masukkan data sensor ke tabel logs
+    // Insert ke Logs
     await supabase.from('feeder_logs').insert([
       { weight, storage, ir_status }
     ]);
 
-    // 2. Cek apakah ada perintah FEED yang PENDING
+    // Cek Perintah PENDING
     const { data: command } = await supabase
       .from('feeder_commands')
       .select('*')
@@ -32,18 +35,17 @@ export async function POST(request: Request) {
       .maybeSingle();
 
     if (command) {
-      // Update status jadi SUCCESS supaya tidak diproses ulang
       await supabase
         .from('feeder_commands')
         .update({ status: 'SUCCESS' })
         .eq('id', command.id);
 
-      // KIRIM BALASAN "FEED" KE NODEMCU
       return NextResponse.json({ message: 'FEED' });
     }
 
     return NextResponse.json({ message: 'OK' });
   } catch (error) {
+    console.error("API Error:", error);
     return NextResponse.json({ error: 'Internal Error' }, { status: 500 });
   }
 }
