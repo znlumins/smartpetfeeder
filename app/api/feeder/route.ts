@@ -11,19 +11,39 @@ export async function POST(request: Request) {
     const body = await request.json();
     let rawData = body.data || "";
 
-    // MEMBERSIHKAN DATA DARI KARAKTER ENTER (\r atau \n)
-    const cleanData = rawData.replace(/(\r\n|\n|\r)/gm, "").trim();
+    // 1. Bersihkan karakter aneh tapi sisakan angka, titik, dan pipa (|)
+    const cleanData = rawData.replace(/[^0-9.|A-Z]/gi, "").trim();
     const parts = cleanData.split('|');
 
-    // KONVERSI KE ANGKA (Memastikan weight tidak jadi 0)
-    const weight = Number(parts[0]) || 0;
-    const storage = Number(parts[1]) || 0;
+    // 2. Gunakan parseFloat dan pastikan hasilnya bukan NaN
+    // Kita ambil bagian pertama (weight)
+    let weightVal = parseFloat(parts[0]);
+    if (isNaN(weightVal)) weightVal = 0; // Jika gagal, set 0
+
+    // Kita ambil bagian kedua (storage/stok)
+    let storageVal = parseInt(parts[1]);
+    if (isNaN(storageVal)) storageVal = 0;
+
     const ir_status = parts[2] || "CLEAR";
 
-    // 1. Simpan ke Supabase
-    await supabase.from('feeder_logs').insert([{ weight, storage, ir_status }]);
+    // DEBUG LOG (Cek di Dashboard Vercel)
+    console.log("HASIL PARSING FINAL:", { weightVal, storageVal, ir_status });
 
-    // 2. Cek Perintah FEED
+    // 3. Simpan ke Supabase
+    const { error } = await supabase.from('feeder_logs').insert([
+      { 
+        weight: weightVal, 
+        storage: storageVal, 
+        ir_status: ir_status 
+      }
+    ]);
+
+    if (error) {
+      console.error("SUPABASE ERROR:", error.message);
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    // 4. Cek Perintah Feed
     const { data: command } = await supabase
       .from('feeder_commands')
       .select('*')
@@ -37,6 +57,6 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ message: 'OK' });
   } catch (error) {
-    return NextResponse.json({ error: 'Error' }, { status: 500 });
+    return NextResponse.json({ error: 'Internal Error' }, { status: 500 });
   }
 }
