@@ -1,66 +1,49 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 
-// 1. Ambil variabel tanpa tanda '!'
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-// 2. Gunakan fallback (cadangan) agar build tidak crash
-// Kita kasih string kosong jika variabel tidak ditemukan saat proses build
 const supabase = createClient(
-  supabaseUrl || 'https://placeholder.supabase.co',
-  supabaseKey || 'placeholder-key'
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
-
-// 3. Tambahkan ini agar Vercel tidak menganggap ini static page
-export const dynamic = 'force-dynamic';
 
 export async function POST(request: Request) {
   try {
-    // Validasi runtime: Jika beneran kosong saat diakses
-    if (!supabaseUrl || !supabaseKey) {
-      return NextResponse.json({ error: 'Supabase env missing' }, { status: 500 });
-    }
-
     const body = await request.json();
-    const rawData = body.data;
+    const rawData = body.data; // Menerima "berat|stok|status" dari NodeMCU
 
-    if (!rawData) return NextResponse.json({ error: 'No data provided' }, { status: 400 });
+    if (!rawData) return NextResponse.json({ message: 'No Data' }, { status: 400 });
 
-    const [weight, storage, ir_status] = rawData.split('|');
+    // MEMECAH DATA (SPLIT)
+    const parts = rawData.split('|');
+    const weight = parseFloat(parts[0]) || 0;
+    const storage = parseInt(parts[1]) || 0;
+    const ir_status = parts[2] || 'CLEAR';
 
-    // 1. Simpan data sensor
-    const { error: insertError } = await supabase
-      .from('feeder_logs')
-      .insert([
-        { 
-          weight: parseFloat(weight) || 0, 
-          storage: parseInt(storage) || 0, 
-          ir_status: ir_status || 'unknown'
-        }
-      ]);
+    // 1. Masukkan data sensor ke tabel logs
+    await supabase.from('feeder_logs').insert([
+      { weight, storage, ir_status }
+    ]);
 
-    if (insertError) throw insertError;
-
-    // 2. Cek perintah "FEED"
-    const { data: cmdData } = await supabase
+    // 2. Cek apakah ada perintah FEED yang PENDING
+    const { data: command } = await supabase
       .from('feeder_commands')
-      .select('command')
+      .select('*')
       .eq('status', 'PENDING')
-      .single();
+      .maybeSingle();
 
-    if (cmdData?.command === 'FEED') {
+    if (command) {
+      // Update status jadi SUCCESS supaya tidak diproses ulang
       await supabase
         .from('feeder_commands')
         .update({ status: 'SUCCESS' })
-        .eq('status', 'PENDING');
+        .eq('id', command.id);
 
-      return NextResponse.json({ message: "FEED" });
+      // KIRIM BALASAN "FEED" KE NODEMCU
+      return NextResponse.json({ message: 'FEED' });
     }
 
-    return NextResponse.json({ message: "OK" });
-  } catch (error: any) {
-    console.error('Error:', error.message);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return NextResponse.json({ message: 'OK' });
+  } catch (error) {
+    return NextResponse.json({ error: 'Internal Error' }, { status: 500 });
   }
 }
