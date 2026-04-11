@@ -1,7 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
-import { NextResponse } from 'next/server'; // Mengatasi error NextResponse
+import { NextResponse } from 'next/server';
 
-// Mengatasi error Cannot find name 'supabase'
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -10,24 +9,38 @@ const supabase = createClient(
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const rawData = body.data;
+    let rawData = body.data || "";
 
-    // Pastikan pakai NextResponse.json
-    if (!rawData) {
-      return NextResponse.json({ message: 'No Data' }, { status: 400 });
-    }
+    console.log("Raw Data Masuk:", rawData); // Cek di Logs Vercel
 
-    const parts = rawData.split('|');
-    const weight = parseFloat(parts[0]?.trim()) || 0;
-    const storage = parseInt(parts[1]?.trim()) || 0;
-    const ir_status = parts[2]?.trim() || 'CLEAR';
+    if (!rawData) return NextResponse.json({ message: 'No Data' }, { status: 400 });
 
-    // Insert ke Logs
-    await supabase.from('feeder_logs').insert([
-      { weight, storage, ir_status }
+    // 1. PEMBERSIHAN TOTAL (Hapus karakter gaib \r atau \n)
+    const cleanData = rawData.replace(/(\r\n|\n|\r)/gm, "").trim();
+    const parts = cleanData.split('|');
+
+    // 2. KONVERSI PAKSA (Gunakan Number() agar lebih kuat dari parseFloat)
+    const weight = Number(parts[0]) || 0;
+    const storage = Number(parts[1]) || 0;
+    const ir_status = parts[2] || 'CLEAR';
+
+    console.log("Data Setelah Diproses:", { weight, storage, ir_status });
+
+    // 3. INSERT KE SUPABASE
+    const { error: insertError } = await supabase.from('feeder_logs').insert([
+      { 
+        weight: weight, 
+        storage: storage, 
+        ir_status: ir_status 
+      }
     ]);
 
-    // Cek Perintah PENDING
+    if (insertError) {
+      console.error("Supabase Error:", insertError.message);
+      return NextResponse.json({ error: insertError.message }, { status: 500 });
+    }
+
+    // 4. CEK PERINTAH FEED (PENDING)
     const { data: command } = await supabase
       .from('feeder_commands')
       .select('*')
@@ -35,6 +48,7 @@ export async function POST(request: Request) {
       .maybeSingle();
 
     if (command) {
+      // Update jadi SUCCESS agar tidak diproses ulang
       await supabase
         .from('feeder_commands')
         .update({ status: 'SUCCESS' })
@@ -45,7 +59,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ message: 'OK' });
   } catch (error) {
-    console.error("API Error:", error);
+    console.error("Internal Server Error:", error);
     return NextResponse.json({ error: 'Internal Error' }, { status: 500 });
   }
 }
