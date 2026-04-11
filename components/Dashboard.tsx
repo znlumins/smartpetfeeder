@@ -19,7 +19,6 @@ interface FeederLog {
 
 export default function DashboardPage() {
   const [activeTab, setActiveTab] = useState<'home' | 'stats' | 'feeder' | 'settings'>('home');
-  
   const [foodLevel, setFoodLevel] = useState(0);
   const [bowlWeight, setBowlWeight] = useState(0);
   const [irStatus, setIrStatus] = useState("Checking...");
@@ -28,31 +27,47 @@ export default function DashboardPage() {
   const [isFeeding, setIsFeeding] = useState(false);
 
   useEffect(() => {
+    // 1. FUNGSI AMBIL DATA AWAL
     const getInitialData = async () => {
-      const { data } = await supabase
+      console.log("%c[DEBUG] Mencoba ambil data awal...", "color: blue; font-weight: bold;");
+      
+      const { data, error } = await supabase
         .from('feeder_logs')
         .select('*')
         .order('created_at', { ascending: false })
         .limit(10); 
       
+      if (error) {
+        console.error("%c[ERROR] Gagal ambil data awal:", "color: red;", error.message);
+        return;
+      }
+
       if (data && data.length > 0) {
+        console.log("%c[SUCCESS] Data awal diterima:", "color: green;", data[0]);
         setFoodLevel(data[0].storage);
         setBowlWeight(data[0].weight);
         setIrStatus(data[0].ir_status === "ADA" ? "Object Detected" : "Clear");
         setLogs(data);
         setIsOnline(true);
+      } else {
+        console.warn("[WARN] Tabel feeder_logs kosong!");
       }
     };
 
     getInitialData();
 
+    // 2. SETUP REALTIME (PASTIKAN REPLICATION DI SUPABASE SUDAH AKTIF)
+    console.log("[DEBUG] Menghubungkan ke Realtime Channel...");
     const channel = supabase
       .channel('realtime-iot')
       .on(
         'postgres_changes', 
         { event: 'INSERT', schema: 'public', table: 'feeder_logs' }, 
         (payload: RealtimePostgresInsertPayload<FeederLog>) => {
+          console.log("%c[REALTIME] Data baru terdeteksi!", "color: purple; font-weight: bold;");
           const newData = payload.new;
+          console.log("Isi payload baru:", newData);
+
           setFoodLevel(newData.storage);
           setBowlWeight(newData.weight);
           setIrStatus(newData.ir_status === "ADA" ? "Object Detected" : "Clear");
@@ -60,23 +75,41 @@ export default function DashboardPage() {
           setIsOnline(true);
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log(`[STATUS] Koneksi Realtime: ${status}`);
+        if (status === 'CHANNEL_ERROR') {
+          console.error("!!! REPLICATION MUNGKIN BELUM DIAKTIFKAN DI DASHBOARD SUPABASE !!!");
+        }
+      });
 
-    return () => { supabase.removeChannel(channel); };
+    return () => { 
+      console.log("[DEBUG] Membersihkan channel realtime...");
+      supabase.removeChannel(channel); 
+    };
   }, []);
 
+  // 3. FUNGSI TOMBOL MAKAN
   const handleFeedNow = async () => {
     if (isFeeding) return;
+    
+    console.log("%c[ACTION] Tombol Feed Now ditekan", "background: #e91e63; color: white; padding: 2px 5px;");
     setIsFeeding(true);
+    
     const { error } = await supabase
       .from('feeder_commands')
       .insert([{ command: 'FEED', portion: 25, status: 'PENDING' }]);
     
     if (error) {
+      console.error("[ERROR] Gagal input perintah ke database:", error.message);
       alert("Gagal mengirim perintah!");
       setIsFeeding(false);
     } else {
-      setTimeout(() => setIsFeeding(false), 10000); 
+      console.log("%c[SUCCESS] Perintah FEED masuk ke tabel commands (PENDING)", "color: green;");
+      // Cooldown 10 detik agar tidak spam
+      setTimeout(() => {
+        setIsFeeding(false);
+        console.log("[DEBUG] Cooldown selesai, tombol aktif kembali.");
+      }, 10000); 
     }
   };
 
@@ -88,18 +121,28 @@ export default function DashboardPage() {
         return (
           <div className={tabWrapperClass}>
             <div className="flex flex-col lg:flex-row gap-6">
+              {/* FOOD LEVEL CIRCLE */}
               <div className="flex-[1.5] w-full bg-white rounded-[40px] shadow-sm border border-gray-50 flex flex-col items-center justify-center p-8 lg:p-12 min-h-112.5">
                 <p className="text-gray-400 font-black uppercase tracking-[0.3em] text-[10px] mb-8 text-center">Food Storage Level</p>
                 <div className="relative w-64 h-64 lg:w-80 lg:h-80 flex items-center justify-center">
                   <svg className="absolute w-full h-full -rotate-90" viewBox="0 0 120 120">
                     <circle cx="60" cy="60" r="54" fill="none" stroke="#f8f8f8" strokeWidth="3" />
-                    <circle cx="60" cy="60" r="54" fill="none" stroke="#e91e63" strokeWidth="5" strokeDasharray="339.3" strokeDashoffset={339.3 - (339.3 * foodLevel / 100)} strokeLinecap="round" className="transition-all duration-1000 ease-in-out" />
+                    <circle 
+                      cx="60" cy="60" r="54" 
+                      fill="none" stroke="#e91e63" 
+                      strokeWidth="5" 
+                      strokeDasharray="339.3" 
+                      strokeDashoffset={339.3 - (339.3 * foodLevel / 100)} 
+                      strokeLinecap="round" 
+                      className="transition-all duration-1000 ease-in-out" 
+                    />
                   </svg>
                   <div className="text-center">
                     <span className="text-7xl lg:text-9xl font-black tracking-tighter leading-none">{foodLevel}</span>
                     <span className="text-2xl lg:text-4xl font-bold text-gray-200 ml-1">%</span>
                   </div>
                 </div>
+                {/* SMALL CARDS */}
                 <div className="mt-10 grid grid-cols-2 gap-4 w-full max-w-md">
                   <div className="p-5 bg-gray-50 rounded-3xl border border-gray-100/50 text-center">
                     <p className="text-[9px] font-black text-gray-400 uppercase mb-1">Bowl Weight</p>
@@ -112,6 +155,7 @@ export default function DashboardPage() {
                 </div>
               </div>
 
+              {/* MANUAL FEEDING BUTTON */}
               <div className="flex-1 flex flex-col gap-6">
                 <section className="bg-[#1d1d1d] p-10 rounded-[40px] text-white shadow-2xl flex flex-col justify-center items-center h-full min-h-[300px]">
                   <h3 className="font-black text-[10px] uppercase tracking-widest text-gray-500 mb-8">Manual Feeding</h3>
