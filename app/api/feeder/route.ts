@@ -9,26 +9,38 @@ const supabase = createClient(
 export async function POST(request: Request) {
   try {
     const body = await request.json();
+    
+    // LOG UNTUK DEBUG: Lihat apa yang dikirim NodeMCU
+    console.log("RAW BODY DARI NODEMCU:", body);
+
     let rawData = body.data || "";
 
-    // 1. PEMBERSIHAN TOTAL
-    // Kita pecah dulu pakai pipa (|)
+    // 1. Bersihkan spasi atau enter di awal/akhir string total
+    rawData = rawData.trim();
+
+    // 2. Pecah pakai pipa (|)
     const parts = rawData.split('|');
 
-    // 2. FORCING NUMBER (Hanya ambil angka dan titik saja)
-    // Ini akan membuang \r, \n, spasi, atau karakter aneh yang nempel di "1387"
-    const weightClean = parts[0] ? parts[0].replace(/[^0-9.]/g, '') : "0";
-    const storageClean = parts[1] ? parts[1].replace(/[^0-9.]/g, '') : "0";
+    // 3. Ambil dan bersihkan masing-masing bagian
+    // Kita pakai regex yang lebih ketat untuk memastikan hanya angka yang diambil
+    const weightRaw = parts[0] ? parts[0].replace(/[^\d.-]/g, '') : "0";
+    const storageRaw = parts[1] ? parts[1].replace(/[^\d.-]/g, '') : "0";
     
-    const weight = parseFloat(weightClean) || 0;
-    const storage = parseInt(storageClean) || 0;
+    // Konversi ke angka
+    const weight = parseFloat(weightRaw) || 0;
+    const storage = parseFloat(storageRaw) || 0;
     const ir_status = parts[2] ? parts[2].trim() : "CLEAR";
 
-    console.log("DEBUG PARSING ->", { weight, storage, ir_status });
+    // LOG HASIL PARSING: Pastikan di sini bukan 0 lagi
+    console.log("HASIL PARSING FINAL:", { weight, storage, ir_status });
 
-    // 3. INSERT KE SUPABASE
+    // 4. INSERT KE SUPABASE
     const { error } = await supabase.from('feeder_logs').insert([
-      { weight, storage, ir_status }
+      { 
+        weight: weight, 
+        storage: storage, 
+        ir_status: ir_status 
+      }
     ]);
 
     if (error) {
@@ -36,7 +48,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    // 4. CEK PERINTAH FEED
+    // 5. CEK PERINTAH FEED (Logic andalan kamu)
     const { data: command } = await supabase
       .from('feeder_commands')
       .select('*')
@@ -51,7 +63,8 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json({ message: 'OK' });
-  } catch (error) {
+  } catch (err) {
+    console.error("CATCH ERROR:", err);
     return NextResponse.json({ error: 'Internal Error' }, { status: 500 });
   }
 }
